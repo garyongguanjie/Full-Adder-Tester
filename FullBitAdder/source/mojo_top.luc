@@ -1,0 +1,214 @@
+//Full Adder Tester using FPGA
+//In this project, we use an FPGA to test a full bit adder by inputing a,b,c through the FPGA.
+//The FPGA would then check if the output sum, carry is correct.
+//There are 2 phases of testing.
+//1. It tests each of the 8 cases. The right row of leds will indicate which test it is currently on
+//, middle row indicates if it is right and the left most row records down if it is right for each test case. 
+//2.Manual input.The user can input any value for a,b,c by flipping the middle switches. 
+//The FPGA will light up the middle row of leds if it is right and off all leds if it is wrong.
+
+module mojo_top (
+    input clk,              // 50MHz clock
+    input rst_n,            // reset button (active low)
+    output led [8],         // 8 user controllable LEDs
+    input cclk,             // configuration clock, AVR ready when high
+    output spi_miso,        // AVR SPI MISO
+    input spi_ss,           // AVR SPI Slave Select
+    input spi_mosi,         // AVR SPI MOSI
+    input spi_sck,          // AVR SPI Clock
+    output spi_channel [4], // AVR general purpose pins (used by default to select ADC channel)
+    input avr_tx,           // AVR TX (FPGA RX)
+    output avr_rx,          // AVR RX (FPGA TX)
+    input avr_rx_busy,      // AVR RX buffer full
+    output io_led [3][8],   // LEDs on IO Shield
+    output io_seg [8],      // 7-segment LEDs on IO Shield
+    output io_sel [4],      // Digit select on IO Shield
+    input io_button [5],    // 5 buttons on IO Shield
+    input io_dip [3][8],  // DIP switches on IO Shield
+    
+    output a,
+    output b,
+    output c,
+    input sum,
+    input carry
+    
+  ) {
+  
+  sig rst;                  // reset signal
+  .clk(clk) {
+    // The reset conditioner is used to synchronize the reset signal to the FPGA
+    // clock. This ensures the entire FPGA comes out of reset at the same time.
+    reset_conditioner reset_cond;
+    .rst(rst){
+    fsm state ={A0B0C0, // here we use 10 states to record each of the 8 test cases and lastly indicate if
+                A0B0C1, // it passes all->PASSED or it fails-> on one or more cases
+                A0B1C0, // manual mode starts when the automatic mode is done
+                A0B1C1,
+                A1B0C0,
+                A1B0C1,
+                A1B1C0,
+                A1B1C1,
+                PASSED,
+                FAILED,
+                MANUAL};
+         dff clock[27]; // we use a flip flop here as a clock
+         dff pass[8];   // 8 bits of data to record down if the adder passes for each of the 8 cases
+     }                  // by default set to all 0s(binary).
+        
+  }
+  
+  always {
+    reset_cond.in = ~rst_n; // input raw inverted reset signal
+    rst = reset_cond.out;   // conditioned reset
+    
+    led = 8h00;             // turn LEDs off
+    spi_miso = bz;          // not using SPI
+    spi_channel = bzzzz;    // not using flags
+    avr_rx = bz;            // not using serial port
+    
+    io_led = 3x{{8h00}};    // turn LEDs off
+    io_seg = 8hff;          // turn segments off
+    io_sel = 4hf;           // select no digits
+    clock.d =clock.q+1;     //used to simulate clock adding one every cycle of the 50Mhz clk
+    io_led[2]=pass.q;       //getting data from 'pass' flipflop and outputing led to indicate if it passes
+    a=0;                    //Initial state of inputs
+    b=0;
+    c=0;
+    
+    case(state.q){
+      state.A0B0C0:
+          a=0; b=0;c=0;
+        io_led[0][0]=1;      //identify which state/test case it is currently on 
+        if(sum==0&carry==0){//checks if it passes
+          io_led[1]=8hff;   //indicate pass on 2nd row of leds
+          pass.d[0]=1;      //indicate that it passes this case store it on a flipflop
+           }                //this is done so the next state can recall if it passes the previous cases
+ 
+        if(clock.q[26]==1){
+          state.d = state.A0B0C1;
+          clock.d=0;        //reset clock to all zeros
+           }
+       
+      state.A0B0C1:
+        a=0;b=0;c=1;
+        io_led[0][1]=1;
+        if(sum==1&carry==0){
+          io_led[1]=8hff; 
+          pass.d[1]=1;    
+        }
+        if(clock.q[26]==1){
+          state.d = state.A0B1C0;
+          clock.d=0;
+          }
+        
+       state.A0B1C0:
+        a=0;b=1;c=0;
+        io_led[0][2]=1;
+        if(sum==1&carry==0){
+          io_led[1]=8hff; 
+          pass.d[2]=1;     
+        }
+        if(clock.q[26]==1){
+          state.d = state.A0B1C1;
+          clock.d=0;
+          }
+        
+        state.A0B1C1:
+          a=0;b=1;c=1;
+          io_led[0][3]=1;
+          if(sum==0&carry==1){
+            io_led[1]=8hff; 
+            pass.d[3]=1;    
+            }
+          if(clock.q[26]==1){
+            io_led[2]=pass.q;
+            state.d = state.A1B0C0;
+            clock.d=0;
+          }  
+        
+         state.A1B0C0:
+          a=1;b=0;c=0;
+          io_led[0][4]=1;
+          if(sum==1&carry==0){
+            io_led[1]=8hff; 
+            pass.d[4]=1;     
+            }
+          if(clock.q[26]==1){
+            state.d = state.A1B0C1;
+            clock.d=0;
+          }  
+        
+          state.A1B0C1:
+            a=1;b=0;c=1;
+            io_led[0][5]=1;
+          if(sum==0&carry==1){
+            io_led[1]=8hff; 
+            pass.d[5]=1;     
+            }
+          if(clock.q[26]==1){
+            io_led[2]=pass.q;
+            state.d = state.A1B1C0;
+            clock.d=0;
+          } 
+        
+          state.A1B1C0:
+            a=1;b=1;c=0;
+            io_led[0][6]=1;
+          if(sum==0&carry==1){
+            io_led[1]=8hff; 
+            pass.d[6]=1;     
+            }
+          if(clock.q[26]==1){
+            state.d = state.A1B1C1;
+            clock.d=0;
+          } 
+        
+        state.A1B1C1:
+            a=1;b=1;c=1;
+            io_led[0][7]=1;
+          if(sum==1&carry==1){
+            io_led[1]=8hff; 
+            pass.d[7]=1;     
+            }
+          if(clock.q[26]==1){
+            if(pass.q==b11111111){
+              state.d = state.PASSED;
+            } else{
+            state.d = state.FAILED;}
+            }
+        
+      state.PASSED:
+        clock.d=0;
+        io_led[0] = 8hff; //lights up everything if it passes
+        io_led [1] = 8hff;
+        if(clock.q[26]==1){
+          state.d= state.MANUAL;
+        }
+        
+      state.FAILED:
+        clock.d=0;           //off first 2 rows of leds (from left )      
+         if(clock.q[26]==1){ //leftmost row of leds only lights up for test cases that passed
+          state.d= state.MANUAL;
+        }
+      
+        //goes to manual mode after automatic testing
+        //flipping the switch from the right will toggle a,b,c
+        //center row of leds will light up if it is the correct output 
+        
+      state.MANUAL:
+        clock.d=0;
+        a= io_dip[0][0]; //connects a,b,c to the respective switches
+        b=io_dip[0][1];
+        c=io_dip[0][2];
+        
+        if(clock.q[26]==1){
+          if(io_dip[0][0]+io_dip[0][1]+io_dip[0][2]==(carry*2+sum)){ //checks if output is right
+            io_led[1]=8hff;                                          //lighting up center leds
+        }else{
+          io_led[1]=8h00;}                                           //off leds if it fails 
+                                                                     //(not a state machine hence need to manually off them)
+        
+        }
+    }
+  }
+}
