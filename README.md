@@ -1,2 +1,2 @@
-# Full-Adder-Tester
-Using MOJO FPGA to test a full adder
+# SUTD 50.002 Mini Hardware Project Full-Adder-Tester 
+Using Mojo FPGA to test functionality of full adder
