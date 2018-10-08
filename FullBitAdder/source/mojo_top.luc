@@ -196,19 +196,18 @@ module mojo_top (
         //center row of leds will light up if it is the correct output 
         
       state.MANUAL:
-        clock.d=0;
         a= io_dip[0][0]; //connects a,b,c to the respective switches
         b=io_dip[0][1];
         c=io_dip[0][2];
         
-        if(clock.q[26]==1){
+
           if(io_dip[0][0]+io_dip[0][1]+io_dip[0][2]==(carry*2+sum)){ //checks if output is right
             io_led[1]=8hff;                                          //lighting up center leds
         }else{
           io_led[1]=8h00;}                                           //off leds if it fails 
                                                                      //(not a state machine hence need to manually off them)
         
-        }
+    
     }
   }
 }
